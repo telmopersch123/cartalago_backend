@@ -1,13 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "servidor",
     "strict": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
   "include": ["servidor/**/*.ts"],
   "exclude": ["node_modules"]
