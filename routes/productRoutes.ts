@@ -1,21 +1,11 @@
 import { Request, Response, Router } from "express";
 import multer from "multer";
-import path from "path";
+
+import fs from "fs";
+import cloudinary from "../config/cloudinaryConfig";
 import { Product } from "../models/Product";
-
+const upload = multer({ dest: "temp/" });
 const router = Router();
-
-// Configuração do multer para upload de imagens
-const storage = multer.diskStorage({
-  destination: function (_req, _file, cb) {
-    cb(null, "uploads/"); // pasta onde as imagens serão salvas
-  },
-  filename: function (_req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname)); // nome único
-  },
-});
-
-const upload = multer({ storage });
 
 // Array em memória (banco fake)
 let products: Product[] = [];
@@ -34,50 +24,84 @@ router.get("/:id", (req: Request, res: Response) => {
 });
 
 // POST - criar produto com upload de imagem
-router.post("/", upload.single("file_image"), (req: Request, res: Response) => {
-  const { nome, descricao, preco, precoPromocional, checkbox_group } = req.body;
-  const file_image = (req as any).file ? (req as any).file.filename : "";
+router.post(
+  "/",
+  upload.single("file_image"),
+  async (req: Request, res: Response) => {
+    try {
+      const { nome, descricao, preco, precoPromocional, checkbox_group } =
+        req.body;
 
-  const newProduct: Product = {
-    id: (products.length + 1).toString(),
-    nome,
-    descricao,
-    preco: Number(preco),
-    checkbox_group: checkbox_group ? JSON.parse(checkbox_group) : [],
-    precoPromocional: precoPromocional ? Number(precoPromocional) : undefined,
-    file_image,
-  };
+      let file_image_url = "";
+      if (req.file) {
+        // Faz upload direto para Cloudinary
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: "cartalago", // pasta dentro do Cloudinary
+        });
+        file_image_url = result.secure_url;
+        fs.unlinkSync(req.file.path);
+      }
 
-  products.push(newProduct);
-  res.status(201).json(newProduct);
-});
+      const newProduct: Product = {
+        id: (products.length + 1).toString(),
+        nome,
+        descricao,
+        preco: Number(preco),
+        checkbox_group: checkbox_group ? JSON.parse(checkbox_group) : [],
+        precoPromocional: precoPromocional
+          ? Number(precoPromocional)
+          : undefined,
+        file_image: file_image_url,
+      };
+
+      products.push(newProduct);
+      res.status(201).json(newProduct);
+    } catch (error) {
+      console.error("Erro ao criar produto:", error);
+      return res.status(500).json({ message: "Erro ao criar produto" });
+    }
+  }
+);
 
 // PUT - atualizar produto
 router.put(
   "/:id",
   upload.single("file_image"),
-  (req: Request, res: Response) => {
-    const index = products.findIndex((p) => p.id === req.params["id"]);
-    if (index === -1)
-      return res.status(404).json({ message: "Produto não encontrado" });
+  async (req: Request, res: Response) => {
+    try {
+      const index = products.findIndex((p) => p.id === req.params["id"]);
+      if (index === -1)
+        return res.status(404).json({ message: "Produto não encontrado" });
 
-    const { nome, descricao, preco, precoPromocional, checkbox_group } =
-      req.body;
-    const file_image = (req as any).file
-      ? (req as any).file.filename
-      : products[index].file_image;
+      const { nome, descricao, preco, precoPromocional, checkbox_group } =
+        req.body;
+      let file_image = products[index].file_image; // mantém a imagem atual se não houver novo upload
+      if (req.file) {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: "cartalago",
+        });
+        file_image = result.secure_url;
 
-    products[index] = {
-      ...products[index],
-      nome,
-      descricao,
-      preco: Number(preco),
-      checkbox_group: checkbox_group ? JSON.parse(checkbox_group) : [],
-      precoPromocional: precoPromocional ? Number(precoPromocional) : undefined,
-      file_image,
-    };
+        fs.unlinkSync(req.file.path);
+      }
 
-    return res.json(products[index]);
+      products[index] = {
+        ...products[index],
+        nome,
+        descricao,
+        preco: Number(preco),
+        checkbox_group: checkbox_group ? JSON.parse(checkbox_group) : [],
+        precoPromocional: precoPromocional
+          ? Number(precoPromocional)
+          : undefined,
+        file_image,
+      };
+
+      return res.json(products[index]);
+    } catch (error) {
+      console.error("Erro ao atualizar produto:", error);
+      return res.status(500).json({ message: "Erro ao atualizar produto" });
+    }
   }
 );
 
